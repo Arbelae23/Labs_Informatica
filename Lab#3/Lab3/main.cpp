@@ -366,10 +366,151 @@ int main() {
             break;
         }
 
-        case 4:
-            cout << "[Opcion seleccionada] Acceder como usuario\n";
-            // Aquí se llamará a la función para consultar o retirar dinero
+        case 4:{
+            cout << "\n-- MODO USUARIO --\n";
+            try {
+                string rutaBase = "C:/Users/USER/Documents/GitHub/Labs_Informatica/Lab#3/Lab3/";
+                string rutaUsuarios = rutaBase + "usuarios.txt";
+
+                ifstream in(rutaUsuarios, ios::binary);
+                if (!in.is_open())
+                    throw runtime_error("No se encontro usuarios.txt");
+
+                cin.ignore();
+                cout << "Ingrese cedula: ";
+                string cedula; getline(cin, cedula);
+                cout << "Ingrese clave: ";
+                string clave; getline(cin, clave);
+
+                if (cedula.empty() || clave.empty())
+                    throw runtime_error("Debe ingresar cedula y clave.");
+
+                // Contar lineas del archivo
+                int numLineas = 0;
+                string temp;
+                while (getline(in, temp)) numLineas++;
+                in.clear();
+                in.seekg(0, ios::beg);
+
+                // Crear arreglo dinamico para guardar lineas
+                string* lineas = new string[numLineas];
+                for (int i = 0; i < numLineas; ++i)
+                    getline(in, lineas[i]);
+                in.close();
+
+                bool encontrado = false;
+                bool actualizado = false;
+
+                for (int i = 0; i < numLineas; ++i) {
+                    stringstream ss(lineas[i]);
+                    string cedulaF, claveF, saldoF, nF, metodoF;
+                    getline(ss, cedulaF, ',');
+                    getline(ss, claveF, ',');
+                    getline(ss, saldoF, ',');
+                    getline(ss, nF, ',');
+                    getline(ss, metodoF, ',');
+
+                    if (cedula == cedulaF) {
+                        int nUser = stoi(nF);
+                        int metodoUser = stoi(metodoF);
+
+                        string bits;
+                        for (unsigned char c : claveF)
+                            convertirByteABits_aplicacion(c, bits);
+
+                        string claveDec;
+                        if (metodoUser == 1)
+                            claveDec = decodificarMetodo1_aplicacion(bits, nUser);
+                        else
+                            claveDec = decodificarMetodo2_aplicacion(bits, nUser);
+
+                        string claveReal = convertirBitsABytes_aplicacion(claveDec);
+
+                        if (claveReal == clave) {
+                            encontrado = true;
+                            int saldo = stoi(saldoF);
+                            int opcion = 0;
+
+                            do {
+                                cout << "\n1. Consultar saldo\n2. Retirar dinero\n3. Salir\n> ";
+                                cin >> opcion;
+
+                                if (cin.fail()) {
+                                    cin.clear();
+                                    cin.ignore(1000, '\n');
+                                    throw runtime_error("Entrada no valida. Ingrese un numero.");
+                                }
+
+                                if (opcion == 1) {
+                                    if (saldo < 1000) {
+                                        cout << "No dispone de fondos suficientes para cubrir el costo de la consulta (1000 COP).\n";
+                                    } else {
+                                        saldo -= 1000;
+                                        cout << "Saldo actual (despues del costo): " << saldo << " COP\n";
+                                        actualizado = true;
+                                    }
+                                }
+                                else if (opcion == 2) {
+                                    int retiro;
+                                    cout << "Monto a retirar: ";
+                                    cin >> retiro;
+                                    if (cin.fail() || retiro <= 0) {
+                                        cin.clear();
+                                        cin.ignore(1000, '\n');
+                                        cout << "Monto invalido.\n";
+                                        continue;
+                                    }
+
+                                    if (saldo < 1000) {
+                                        cout << "No dispone de fondos suficientes para cubrir el costo de la transaccion (1000 COP).\n";
+                                    }
+                                    else if (retiro + 1000 > saldo) {
+                                        cout << "Fondos insuficientes para retirar " << retiro
+                                             << " COP. Necesita al menos " << retiro + 1000 << " COP (incluyendo costo).\n";
+                                    }
+                                    else {
+                                        saldo -= retiro + 1000;
+                                        cout << "Retiro exitoso. Nuevo saldo: " << saldo << " COP\n";
+                                        actualizado = true;
+                                    }
+                                }
+
+                            } while (opcion != 3);
+
+                            // Actualizar la linea con el nuevo saldo
+                            stringstream nuevaLinea;
+                            nuevaLinea << cedulaF << "," << claveF << "," << saldo << "," << nF << "," << metodoF;
+                            lineas[i] = nuevaLinea.str();
+                            break;
+                        }
+                    }
+                }
+
+                if (!encontrado)
+                    throw runtime_error("Usuario o clave incorrecta.");
+
+                // Si se modifico el saldo, reescribir el archivo
+                if (actualizado) {
+                    ofstream out(rutaUsuarios, ios::binary);
+                    if (!out.is_open())
+                        throw runtime_error("No se pudo abrir usuarios.txt para actualizar.");
+
+                    for (int i = 0; i < numLineas; ++i)
+                        out << lineas[i] << "\n";
+
+                    out.close();
+                    cout << "Datos actualizados correctamente.\n";
+                } else {
+                    cout << "No se realizaron cambios en el archivo.\n";
+                }
+
+                delete[] lineas; // Liberar memoria
+
+            } catch (const exception &e) {
+                cerr << "Error en modo USUARIO: " << e.what() << "\n";
+            }
             break;
+        }
 
         case 5:
             cout << "Saliendo del programa...\n";
