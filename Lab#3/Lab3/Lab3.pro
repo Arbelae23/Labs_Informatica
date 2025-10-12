@@ -11,4 +11,7 @@ HEADERS += \
     funciones.h
 
 DISTFILES += \
-    Decodificado.txt
+    Clabe.txt \
+    Decodificado.txt \
+    sudo.txt \
+    usuarios.txt

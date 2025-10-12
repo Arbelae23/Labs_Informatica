@@ -55,7 +55,10 @@ SOURCES       = ..\..\funciones.cpp \
 OBJECTS       = release/funciones.o \
 		release/main.o
 
-DIST          = Decodificado.txt funciones.h ..\..\funciones.cpp \
+DIST          = Clabe.txt \
+		Decodificado.txt \
+		sudo.txt \
+		usuarios.txt funciones.h ..\..\funciones.cpp \
 		..\..\main.cpp
 QMAKE_TARGET  = Lab3
 DESTDIR        = release\ #avoid trailing-slash linebreak
@@ -107,7 +110,7 @@ compiler_clean:
 release/funciones.o: ../../funciones.cpp ../../funciones.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o release\funciones.o ..\..\funciones.cpp
 
-release/main.o: ../../main.cpp 
+release/main.o: ../../main.cpp ../../funciones.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o release\main.o ..\..\main.cpp
 
 ####### Install

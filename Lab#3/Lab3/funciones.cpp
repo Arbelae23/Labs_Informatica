@@ -1,5 +1,6 @@
 #include "funciones.h"
 #include <iostream>
+#include <fstream>
 using namespace std;
 
 // FUNCIONES DE CODIFICADOR
@@ -164,4 +165,154 @@ string convertirBitsABytes_string(const string &bits) {
         outBuffer.push_back(static_cast<char>(b));
     }
     return outBuffer;
+}
+//FUNCIONES CLONADAS DE LOS METODOS
+
+//conertimos 1 byte a cadena de caracteres
+void convertirByteABits_aplicacion(unsigned char byte, string &bits) {
+    for (int i = 7; i >= 0; --i)
+        bits.push_back(((byte >> i) & 1) ? '1' : '0');
+}
+
+
+// convertimos 1 cadena de caractes a ascci agrupando de 8
+string convertirBitsABytes_aplicacion(const string &bits) {
+    int outBytes = bits.size() / 8;
+    string outBuffer;
+    outBuffer.reserve(outBytes);
+
+    for (int i = 0; i < outBytes; i++) {
+        unsigned char b = 0;
+        for (int j = 0; j < 8; j++) {
+            b = (b << 1) | (bits[i * 8 + j] - '0');
+        }
+        outBuffer.push_back(static_cast<char>(b));
+    }
+    return outBuffer;
+}
+
+string codificarMetodo1_string(const string &bits, int n) {
+    int totalBits = (int)bits.size();
+    int bloques = totalBits / n;
+    if (bloques == 0) return string();
+
+    string out;
+    out.resize(bloques * n);
+
+    for (int b = 0; b < bloques; ++b) {
+        int startCur = b * n;
+        if (b == 0) {
+            for (int i = 0; i < n; ++i)
+                out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+            continue;
+        }
+        int startPrev = (b - 1) * n;
+        int unos = 0, ceros = 0;
+        for (int i = 0; i < n; ++i)
+            (bits[startPrev + i] == '1') ? ++unos : ++ceros;
+
+        if (unos == ceros) {
+            for (int i = 0; i < n; ++i)
+                out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+        } else if (ceros > unos) {
+            for (int i = 0; i < n; ++i)
+                if (i % 2 == 1) out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+                else out[startCur + i] = bits[startCur + i];
+        } else {
+            for (int i = 0; i < n; ++i)
+                if (i % 3 == 2) out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+                else out[startCur + i] = bits[startCur + i];
+        }
+    }
+    return out;
+}
+
+
+// Decodificar Metodo 1
+string decodificarMetodo1_aplicacion(const string &bits, int n) {
+    int totalBits = (int)bits.size();
+    int bloques = totalBits / n;
+    if (bloques == 0) return string();
+
+    string out;
+    out.resize(bloques * n);
+
+    for (int b = 0; b < bloques; ++b) {
+        int startCur = b * n;
+        if (b == 0) {
+            for (int i = 0; i < n; ++i)
+                out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+            continue;
+        }
+        int startPrev = (b - 1) * n;
+        int unos = 0, ceros = 0;
+        for (int i = 0; i < n; ++i)
+            (out[startPrev + i] == '1') ? ++unos : ++ceros;
+
+        if (unos == ceros) {
+            for (int i = 0; i < n; ++i)
+                out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+        } else if (ceros > unos) {
+            for (int i = 0; i < n; ++i)
+                if (i % 2 == 1) out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+                else out[startCur + i] = bits[startCur + i];
+        } else {
+            for (int i = 0; i < n; ++i)
+                if (i % 3 == 2) out[startCur + i] = (bits[startCur + i] == '0') ? '1' : '0';
+                else out[startCur + i] = bits[startCur + i];
+        }
+    }
+    return out;
+}
+
+// Codificar Metodo 2
+string codificarMetodo2_string(const string &bits, int n) {
+    int totalBits = (int)bits.size();
+    int bloques = totalBits / n;
+    string out;
+    out.resize(bloques * n);
+
+    for (int b = 0; b < bloques; ++b) {
+        int start = b * n;
+        if (n == 1) { out[start] = bits[start]; continue; }
+        out[start + 0] = bits[start + n - 1];
+        for (int i = 1; i < n; ++i)
+            out[start + i] = bits[start + i - 1];
+    }
+    return out;
+}
+
+// Decodificar Metodo 2
+string decodificarMetodo2_aplicacion(const string &bits, int n) {
+    int totalBits = (int)bits.size();
+    int bloques = totalBits / n;
+    string out;
+    out.resize(bloques * n);
+
+    for (int b = 0; b < bloques; ++b) {
+        int start = b * n;
+        if (n == 1) { out[start] = bits[start]; continue; }
+        for (int i = 0; i < n - 1; ++i)
+            out[start + i] = bits[start + i + 1];
+        out[start + n - 1] = bits[start];
+    }
+    return out;
+}
+
+//sistema de archivos
+string leerArchivoBinario(const string &ruta) {
+    ifstream in(ruta, ios::binary);
+    if (!in) throw runtime_error("No se pudo abrir archivo: " + ruta);
+    in.seekg(0, ios::end);
+    streamsize sz = in.tellg();
+    in.seekg(0, ios::beg);
+    string buffer((size_t)sz, '\0');
+    in.read(&buffer[0], sz);
+    return buffer;
+}
+
+void guardarArchivoBinario(const string &ruta, const string &data) {
+    ofstream out(ruta, ios::binary);
+    if (!out) throw runtime_error("No se pudo guardar archivo: " + ruta);
+    out.write(data.data(), data.size());
 }

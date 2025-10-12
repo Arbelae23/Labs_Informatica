@@ -2,13 +2,38 @@
 #include <fstream>
 #include <string>
 #include <stdexcept>
+#include <sstream>
+#include <limits>
 #include "funciones.h"
 
 using namespace std;
 
 int main() {
-    int opcion = 0;
+    {
+        string cedula = "1052837312";
+        string clave = "321";
+        int n = 3, metodo = 1;
 
+        string bits;
+        for (unsigned char c : clave)
+            convertirByteABits_aplicacion(c, bits);
+
+        string cod;
+        if (metodo == 1)
+            cod = codificarMetodo1_string(bits, n);
+        else
+            cod = codificarMetodo2_string(bits, n);
+
+        string claveCod = convertirBitsABytes_aplicacion(cod);
+
+        string ruta = "C:/Users/USER/Documents/GitHub/Labs_Informatica/Lab#3/Lab3/sudo.txt";
+        ofstream out(ruta, ios::binary);
+        out << cedula << "," << claveCod << "," << n << "," << metodo << "\n";
+        out.close();
+
+        cout << "Archivo sudo.txt generado correctamente.\n";
+    }
+    int opcion = 0;
     do {
 
         cout << "1. Codificar archivo (string)\n";
@@ -225,10 +250,121 @@ int main() {
 
             break;
 
-        case 3:
-            cout << "[Opcion seleccionada] Acceder como administrador\n";
-            // Aquí se llamará a la función para validar y registrar usuarios
+        case 3:{
+            cout << "\n-- MODO ADMINISTRADOR --\n";
+            try {
+                // Ruta base
+                string rutaBase = "C:/Users/USER/Documents/GitHub/Labs_Informatica/Lab#3/Lab3/";
+                string rutaSudo = rutaBase + "sudo.txt";
+
+                ifstream in(rutaSudo, ios::binary);
+                if (!in.is_open()) throw runtime_error("No se encontro " + rutaSudo);
+
+                // Pedir credenciales
+                cin.ignore();
+                cout << "Ingrese cedula de admin: ";
+                string cedulaAdmin; getline(cin, cedulaAdmin);
+                cout << "Ingrese clave: ";
+                string clave; getline(cin, clave);
+
+                if (cedulaAdmin.empty() || clave.empty())
+                    throw runtime_error("Debe ingresar cedula y clave.");
+
+                bool valido = false;
+                int nAdmin = 0, metodoAdmin = 0;
+                string linea;
+
+                while (getline(in, linea)) {
+                    stringstream ss(linea);
+                    string cedulaF, claveF, nF, metodoF;
+                    getline(ss, cedulaF, ',');
+                    getline(ss, claveF, ',');
+                    getline(ss, nF, ',');
+                    getline(ss, metodoF, ',');
+
+                    if (cedulaF == cedulaAdmin) {
+                        nAdmin = stoi(nF);
+                        metodoAdmin = stoi(metodoF);
+
+                        string bits;
+                        for (unsigned char c : claveF)
+                            convertirByteABits_aplicacion(c, bits);
+
+                        string claveDec;
+                        if (metodoAdmin == 1)
+                            claveDec = decodificarMetodo1_aplicacion(bits, nAdmin);
+                        else
+                            claveDec = decodificarMetodo2_aplicacion(bits, nAdmin);
+
+                        string claveReal = convertirBitsABytes_aplicacion(claveDec);
+                        cout << "[DEBUG] Clave decodificada: " << claveReal << endl;
+
+                        if (claveReal == clave) valido = true;
+                        break;
+                    }
+                }
+                in.close();
+
+                if (!valido)
+                    throw runtime_error("Admin no autorizado o clave incorrecta.");
+
+                cout << "\nAcceso como ADMINISTRADOR exitoso.\n";
+
+                // Registro de usuario nuevo
+                cout << "Desea registrar un nuevo usuario? (s/n): ";
+                char op; cin >> op; cin.ignore();
+
+                if (op == 's' || op == 'S') {
+                    string cedula, claveU, saldo;
+                    cout << "Ingrese cedula del usuario: ";
+                    getline(cin, cedula);
+                    cout << "Ingrese clave: ";
+                    getline(cin, claveU);
+                    cout << "Ingrese saldo inicial: ";
+                    getline(cin, saldo);
+
+                    if (cedula.empty() || claveU.empty() || saldo.empty())
+                        throw runtime_error("Campos vacíos al registrar usuario.");
+
+                    int nUser, metodoUser;
+                    cout << "Ingrese semilla (n) para el usuario (1-7): ";
+                    cin >> nUser; cin.ignore();
+                    cout << "Ingrese metodo (1 o 2): ";
+                    cin >> metodoUser; cin.ignore();
+
+                    if (nUser < 1 || nUser > 7)
+                        throw runtime_error("Semilla fuera de rango (1-7).");
+                    if (metodoUser != 1 && metodoUser != 2)
+                        throw runtime_error("Método invalido (solo 1 o 2).");
+
+                    string bits;
+                    for (unsigned char c : claveU)
+                        convertirByteABits_aplicacion(c, bits);
+
+                    string cod;
+                    if (metodoUser == 1)
+                        cod = codificarMetodo1_string(bits, nUser);
+                    else
+                        cod = codificarMetodo2_string(bits, nUser);
+
+                    string claveCod = convertirBitsABytes_aplicacion(cod);
+
+                    string rutaUsuarios = rutaBase + "usuarios.txt";
+                    ofstream out(rutaUsuarios, ios::app);
+                    if (!out.is_open())
+                        throw runtime_error("No se pudo abrir usuarios.txt para escribir.");
+                    out << cedula << "," << claveCod << "," << saldo
+                        << "," << nUser << "," << metodoUser << "\n";
+                    out.close();
+
+                    cout << "Usuario registrado correctamente.\n";
+                }
+
+            } catch (const exception &e) {
+                cerr << "Error en modo ADMIN: " << e.what() << "\n";
+            }
             break;
+        }
 
         case 4:
             cout << "[Opcion seleccionada] Acceder como usuario\n";
