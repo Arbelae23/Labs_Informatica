@@ -5,10 +5,12 @@ CONFIG -= qt
 
 SOURCES += \
         main.cpp \
+        redmanager.cpp \
         router.cpp
 
 DISTFILES += \
     PRUEBAS.txt
 
 HEADERS += \
+    redmanager.h \
     router.h
