@@ -1,0 +1,372 @@
+#include "GameWidget.h"
+#include <QPainter>
+#include <QDebug>
+#include <cmath>
+#include <QPixmap>
+#include <algorithm>
+
+GameWidget::GameWidget(QWidget *parent)
+    : QWidget(parent), sim(500, 350, 0.6), scale(1.0), tiempo_dt(0.016), frames_without_projectile(0)
+    ,currentAngle(30.0), currentSpeed(120.0), currentPlayer(1)
+{
+    setMinimumSize(600, 450);
+
+    connect(&timer, &QTimer::timeout, this, &GameWidget::onTick);
+    timer.start(int(tiempo_dt * 1000));
+
+    //fondo
+    backgroundTexture = QPixmap(":/imagenes/multimedia/imagenes/fondo.png" );
+
+
+    // escena
+    sim.obstaculos.clear();
+
+    double marginBottom = 10.0;   // margen inferior
+    double colSize      = 40.0;   // lado columnas (cuadrado)
+    double topSize      = 100.0;  // techo
+
+    double baseY = sim.alto - colSize - marginBottom; // base columnas
+    double topY  = baseY - topSize;                   // altura techo
+
+    // ancla izq
+    double leftTopX  = 80.0;
+    // ancla der
+    double rightTopX = sim.ancho - leftTopX - topSize;
+
+    // ------- Fortaleza izquierda -------
+    // columnas del mismo tamaño, pegadas a los lados del bloque superior
+    sim.agregarObstaculo(Obstaculo(leftTopX,                         baseY, colSize, 200)); // columna izq
+    sim.agregarObstaculo(Obstaculo(leftTopX + topSize - colSize,     baseY, colSize, 200)); // columna der
+    sim.agregarObstaculo(Obstaculo(leftTopX,                         topY,  topSize, 100)); // techo
+
+    // ------- Fortaleza derecha -------
+    sim.agregarObstaculo(Obstaculo(rightTopX,                        baseY, colSize, 200)); // columna izq
+    sim.agregarObstaculo(Obstaculo(rightTopX + topSize - colSize,    baseY, colSize, 200)); // columna der
+    sim.agregarObstaculo(Obstaculo(rightTopX,                        topY,  topSize, 100)); // techo
+
+
+    obstacleTexture = QPixmap(":/imagenes/multimedia/imagenes/obstaculo.png");
+
+    // cañones
+
+    cannonRTexture.load(":/imagenes/multimedia/imagenes/canon1.png");
+    cannonLTexture.load(":/imagenes/multimedia/imagenes/canon2.png");
+    projectileTexture.load(":/imagenes/multimedia/imagenes/bala.png");
+
+    double cannonOffsetY = 20.0;
+    cannon1Y = topY - cannonOffsetY;
+    cannon2Y = cannon1Y;
+
+    cannon1X = leftTopX - 25.0;
+    cannon2X = rightTopX + topSize + 25.0;
+
+}
+
+void GameWidget::lanzarProyectil(double angGrados, double velocidad, int jugador) {
+    double rad = angGrados * M_PI / 180.0;
+
+    // origen según jugador (cañon)
+    double inicioX = (jugador == 1) ? cannon1X : cannon2X;
+    double inicioY = (jugador == 1) ? cannon1Y : cannon2Y;
+
+    double dir = (jugador == 1) ? 1.0 : -1.0;
+
+    double vx = velocidad * std::cos(rad) * dir;
+    double vy = -velocidad * std::sin(rad); // y crece hacia abajo
+
+    sim.limpiarParticulas();
+    Particula p(inicioX, inicioY, vx, vy, 4.0, 6.0);
+    p.gravedad = 9.0;
+
+    p.activa = true;
+    sim.agregarParticula(p);
+
+    if (!timer.isActive()) {
+        timer.start(int(tiempo_dt * 1000));
+    }
+
+    frames_without_projectile = 0;
+}
+
+void GameWidget::setShotParameters(double angle, double speed, int player) {
+    currentAngle = angle;
+    currentSpeed = speed;
+    currentPlayer = player;
+    update();
+}
+
+void GameWidget::onTick() {
+    sim.step(tiempo_dt);
+
+    // victoria?
+    if (checkWinCondition()) {
+        timer.stop();
+        update();
+        return;
+    }
+
+    // fin de turno
+    bool anyActive = false;
+    for (auto &p : sim.particulas) {
+        if (p.activa) {
+            anyActive = true;
+            break;
+        }
+    }
+
+    if (!anyActive) {
+        frames_without_projectile++;
+    } else {
+        frames_without_projectile = 0;
+    }
+
+
+    if (frames_without_projectile > 5) {
+        emit projectileFinished();
+        frames_without_projectile = -100;
+    }
+
+    update();
+}
+
+bool GameWidget::checkWinCondition() {
+    int aliveLeft = 0;   // Obstaculos del jugador 2 (objetivo del Jugador 2)
+    int aliveRight = 0;  // Obstáculos del jugador 1 (objetivo del Jugador 1)
+
+    double midX = sim.ancho / 2.0;
+
+    for (const auto &o : sim.obstaculos) {
+        if (o.estaVivo()) {
+            // Clasifica el obstaculo basado en la posición de su centro (o.x + o.lado/2.0)
+            if (o.x + o.lado/2.0 < midX) {
+                aliveLeft++;
+            }
+            else {
+                aliveRight++;
+            }
+        }
+    }
+
+    if (aliveRight == 0) {
+        emit gameEnded(1); // Gana el Jugador 1 si destruye todos los obstaculos de la DERECHA
+        return true;
+    }
+    if (aliveLeft == 0) {
+        emit gameEnded(2); // Gana el Jugador 2 si destruye todos los obstaculos de la IZQUIERDA
+        return true;
+    }
+
+    return false;
+}
+
+void GameWidget::reiniciarSimulacion() {
+    sim.limpiarParticulas();
+    frames_without_projectile = 0;
+
+    // recrear obstáculos
+    sim.obstaculos.clear();
+
+    double marginBottom = 10.0;
+    double colSize      = 40.0;
+    double topSize      = 100.0;
+
+    double baseY = sim.alto - colSize - marginBottom;
+    double topY  = baseY - topSize;
+
+    double leftTopX  = 80.0;
+    double rightTopX = sim.ancho - leftTopX - topSize;
+
+    // ------- Fortaleza izquierda -------
+    sim.agregarObstaculo(Obstaculo(leftTopX,                      baseY, colSize, 200));
+    sim.agregarObstaculo(Obstaculo(leftTopX + topSize - colSize,  baseY, colSize, 200));
+    sim.agregarObstaculo(Obstaculo(leftTopX,                      topY,  topSize, 100));
+
+    // ------- Fortaleza derecha -------
+    sim.agregarObstaculo(Obstaculo(rightTopX,                     baseY, colSize, 200));
+    sim.agregarObstaculo(Obstaculo(rightTopX + topSize - colSize, baseY, colSize, 200));
+    sim.agregarObstaculo(Obstaculo(rightTopX,                     topY,  topSize, 100));
+
+    // reiniciar timer
+    if (!timer.isActive()) {
+        timer.start(int(tiempo_dt * 1000));
+    }
+
+    update();
+}
+
+void GameWidget::paintEvent(QPaintEvent *) {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // calcular escala automatica
+    double sx = width() / sim.ancho;
+    double sy = height() / sim.alto;
+    double S = std::min(sx, sy);
+
+    // fondo
+    painter.fillRect(rect(), Qt::black);
+    QRect caja(0, 0, sim.ancho * S, sim.alto * S);
+
+    // textura fondo
+    painter.drawPixmap(caja, backgroundTexture);
+
+    // Dibujar borde de la caja
+    painter.setPen(Qt::green);
+    painter.drawRect(caja);
+
+
+    // trayectoria
+
+
+    const double G = 9.0;
+    double angGrados = currentAngle;
+    double velocidad = currentSpeed;
+    int jugadorActual = currentPlayer;
+
+    double x0 = (jugadorActual == 1) ? cannon1X : cannon2X;
+    double y0 = (jugadorActual == 1) ? cannon1Y : cannon2Y;
+
+    double angRad = angGrados * M_PI / 180.0;
+    double dir = (jugadorActual == 1) ? 1.0 : -1.0;
+
+    double vx0 = velocidad * std::cos(angRad) * dir;
+    double vy0 = -velocidad * std::sin(angRad);
+
+    painter.setBrush(Qt::red);
+    painter.setPen(Qt::red);
+
+
+    for (double t = 0.0; t < 2.0; t += 0.02) {
+
+        // pos en t
+        double x_pred = x0 + vx0 * t;
+        double y_pred = y0 + vy0 * t + 0.5 * G * t * t;
+
+        if (x_pred < 0 || x_pred > sim.ancho || y_pred > sim.alto) {
+            break;
+        }
+
+        bool choca = false;
+        for (const auto &o : sim.obstaculos) {
+
+            if (o.estaVivo() && x_pred >= o.x && x_pred <= o.x + o.lado && y_pred >= o.y && y_pred <= o.y + o.lado) {
+                choca = true;
+                break;
+            }
+        }
+        if (choca) break;
+
+        double px = x_pred * S;
+        double py = y_pred * S;
+        painter.drawEllipse(QPointF(px, py), 2, 2);
+    }
+
+
+
+    // cañones
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(Qt::NoBrush);
+
+    double cannonSize = 95.0;
+    double cannonWidth = cannonSize * S;
+    double cannonHeight = cannonSize * S;
+
+
+    QRectF c1((cannon1X - cannonSize/2) * S,
+              (cannon1Y - cannonSize/2) * S,
+              cannonWidth, cannonHeight);
+
+    painter.drawPixmap(c1.toRect(), cannonRTexture);
+
+
+    QRectF c2((cannon2X - cannonSize/2) * S,
+              (cannon2Y - cannonSize/2) * S,
+              cannonWidth, cannonHeight);
+
+    painter.drawPixmap(c2.toRect(), cannonLTexture);
+
+    // obstáculos
+    for (auto &o : sim.obstaculos) {
+        if (!o.estaVivo()) continue;
+
+        // área obstáculo
+        QRectF r(o.x*S, o.y*S, o.lado*S, o.lado*S);
+
+
+        QBrush tileBrush = obstacleTexture.isNull() ? QBrush(Qt::gray) : QBrush(obstacleTexture);
+        painter.setBrush(tileBrush);
+        painter.setPen(Qt::NoPen);
+        painter.drawRect(r);
+
+        // overlay de daño
+        double vida = o.resistencia;
+        if (vida < 100) {
+            double damageFactor = 1.0 - (vida / 100.0);
+
+
+            painter.setBrush(QColor(255, 0, 0, int(damageFactor * 100)));
+            painter.drawRect(r);
+        }
+
+        // borde y texto
+
+        QPen borderPen(Qt::black);
+        borderPen.setWidth(9);
+        painter.setPen(borderPen);
+        painter.setBrush(Qt::NoBrush);
+
+        QFont currentFont = painter.font();
+        currentFont.setPointSize(17);
+        painter.setFont(currentFont);
+
+        painter.drawRect(r);
+
+        painter.drawText(r.left()+2, r.top()+23, QString::number(int(o.resistencia)));
+
+        currentFont.setPointSize(10);
+        painter.setFont(currentFont);
+    }
+
+
+    // proyectil
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(Qt::NoBrush);
+
+    // hay bala activa?
+    bool anyActiveProjectile = false;
+    for (const auto &p : sim.particulas) {
+        if (p.activa) {
+            anyActiveProjectile = true;
+            break;
+        }
+    }
+
+    // sin bala: dibuja en el cañón
+    if (!anyActiveProjectile) {
+        const double DEFAULT_PARTICLE_RADIUS = 6.0;
+
+
+        double x_cannon = (currentPlayer == 1) ? cannon1X : cannon2X;
+        double y_cannon = (currentPlayer == 1) ? cannon1Y : cannon2Y;
+
+        double displayScaleFactor = 2.7;
+        double visualRad = (DEFAULT_PARTICLE_RADIUS * S) * displayScaleFactor;
+
+        QRectF projectileRect((x_cannon * S) - visualRad, (y_cannon * S) - visualRad, visualRad * 2, visualRad * 2);
+        painter.drawPixmap(projectileRect.toRect(), projectileTexture);
+    }
+
+    for (auto &p : sim.particulas) {
+        if (!p.activa) continue;
+
+        double px = p.pos.x * S;
+        double py = p.pos.y * S;
+
+        double displayScaleFactor = 2.7;
+        double visualRad = (p.radio * S) * displayScaleFactor;
+        QRectF projectileRect(px - visualRad, py - visualRad, visualRad * 2, visualRad * 2);
+
+        painter.drawPixmap(projectileRect.toRect(), projectileTexture);
+    }
+}
